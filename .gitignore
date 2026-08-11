@@ -1,0 +1,22 @@
+# Installers Library
+library/
+
+# Local configuration
+.env
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Python cache & virtualenvs
+__pycache__/
+*.pyc
+.venv/
+env/
+backend/app/__pycache__/
+backend/app/routers/__pycache__/
+
+# System files
+.DS_Store
+Thumbs.db
