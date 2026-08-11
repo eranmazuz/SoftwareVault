@@ -1,5 +1,13 @@
 # Installers Library
 library/
+*.iso
+*.exe
+*.msi
+*.dmg
+*.pkg
+*.zip
+*.rar
+*.tar.gz
 
 # Local configuration
 .env

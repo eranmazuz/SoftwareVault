@@ -40,6 +40,9 @@ async def fetch_openrouter_models(api_key: str) -> List[Dict[str, Any]]:
             models_list = []
             
             for item in data.get("data", []):
+                model_id = item.get("id")
+                if not model_id or ":batch" in model_id:
+                    continue
                 pricing = item.get("pricing", {})
                 # OpenRouter pricing is typically represented as cost per 1 token.
                 # Let's convert to price per 1M tokens to make it readable in UI.
