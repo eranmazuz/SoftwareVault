@@ -44,17 +44,21 @@ async def create_software(software: schemas.SoftwareCreate, db: Session = Depend
             
             stored_path = os.path.join(software_dir, f"cover{ext}")
             
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(software.cover_url, follow_redirects=True)
+                response = await client.get(software.cover_url, headers=headers, follow_redirects=True)
                 if response.status_code == 200:
                     with open(stored_path, "wb") as f:
                         f.write(response.content)
                     db_software.cover_path = stored_path
                     db.commit()
                     db.refresh(db_software)
+                else:
+                    print(f"Cover download failed with status code {response.status_code}", flush=True)
         except Exception as e:
-            # Keep creation intact even if cover download fails
-            pass
+            print(f"Failed to download cover image: {str(e)}", flush=True)
             
     return db_software
 
