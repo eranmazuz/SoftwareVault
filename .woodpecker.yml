@@ -1,0 +1,25 @@
+pipeline:
+  # 1. Backend Lint / Syntax Check
+  backend-test:
+    image: python:3.11-slim
+    commands:
+      - pip install -r backend/requirements.txt
+      - python -m py_compile backend/app/main.py backend/app/models.py backend/app/schemas.py backend/app/crud.py backend/app/ai.py
+
+  # 2. Frontend Lint & Build Compilation Check
+  frontend-build:
+    image: node:20-alpine
+    commands:
+      - cd frontend
+      - npm install
+      - npm run build
+
+  # 3. Docker Build Verification
+  docker-build-test:
+    image: docker:dind
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      # Build verification without saving image layers to save disk space on the agent
+      - docker build -t software-vault-backend-test ./backend
+      - docker build -t software-vault-frontend-test ./frontend
