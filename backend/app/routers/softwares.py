@@ -28,35 +28,53 @@ def get_software(software_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=schemas.SoftwareDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_software(software: schemas.SoftwareCreate, db: Session = Depends(get_db)):
     db_software = crud.create_software(db, software)
-    if software.cover_url:
+    
+    # Compile cover URLs to attempt downloading
+    cover_urls_to_try = []
+    
+    if software.domain and software.domain.strip():
+        # Clearbit Logo API is highly reliable for brand/project domains
+        domain_clean = software.domain.strip().lower()
+        cover_urls_to_try.append(f"https://logo.clearbit.com/{domain_clean}")
+        
+    if software.cover_url and software.cover_url.strip():
+        cover_urls_to_try.append(software.cover_url.strip())
+        
+    if cover_urls_to_try:
         import httpx
         try:
-            # Resolve file extension
-            ext = ".png"
-            for possible_ext in [".png", ".jpg", ".jpeg", ".webp", ".svg"]:
-                if possible_ext in software.cover_url.lower():
-                    ext = possible_ext
-                    break
-            
             safe_name = sanitize_path_segment(db_software.name)
             software_dir = os.path.join(config.settings.LIBRARY_PATH, safe_name)
             os.makedirs(software_dir, exist_ok=True)
             
-            stored_path = os.path.join(software_dir, f"cover{ext}")
-            
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(software.cover_url, headers=headers, follow_redirects=True)
-                if response.status_code == 200:
-                    with open(stored_path, "wb") as f:
-                        f.write(response.content)
-                    db_software.cover_path = stored_path
-                    db.commit()
-                    db.refresh(db_software)
-                else:
-                    print(f"Cover download failed with status code {response.status_code}", flush=True)
+            
+            for url in cover_urls_to_try:
+                # Default to .png for Clearbit, check url string for others
+                ext = ".png"
+                for possible_ext in [".png", ".jpg", ".jpeg", ".webp", ".svg"]:
+                    if possible_ext in url.lower():
+                        ext = possible_ext
+                        break
+                
+                stored_path = os.path.join(software_dir, f"cover{ext}")
+                
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.get(url, headers=headers, follow_redirects=True)
+                        if response.status_code == 200:
+                            with open(stored_path, "wb") as f:
+                                f.write(response.content)
+                            db_software.cover_path = stored_path
+                            db.commit()
+                            db.refresh(db_software)
+                            break
+                        else:
+                            print(f"Cover download from {url} failed with status code {response.status_code}", flush=True)
+                except Exception as e:
+                    print(f"Failed to download cover from {url}: {str(e)}", flush=True)
         except Exception as e:
             print(f"Failed to download cover image: {str(e)}", flush=True)
             

@@ -79,7 +79,8 @@ async def extract_metadata_from_filename(filename: str, api_key: str, model: str
         '- "edition": The edition, version or year if present in filename (e.g. "2024", "Pro", "v1.92"). If not present, set to null.\n'
         '- "os": The target operating system. Choose from "Windows", "macOS", "Linux", or "Cross-platform" based on the filename characteristics (e.g. .exe/.msi is Windows, .dmg/.pkg is macOS, .tar.gz/.deb/.rpm is Linux).\n'
         '- "tags": A list of up to 4 tags describing the type of software (e.g. ["IDE", "Development", "Text Editor"], ["Design", "Graphics"], ["Utility"]).\n'
-        '- "cover_url": A direct URL string to a high-quality public logo or application icon for this software. You should search your knowledge and look for direct links from Wikimedia Commons (e.g. upload.wikimedia.org/wikipedia/commons/...), Wikipedia/Wikimedia media paths, or official product asset paths. Ensure it is a direct image link ending in .png, .jpg, .jpeg, .svg, or .webp. If not found, set to null.\n\n'
+        '- "cover_url": A direct URL string to a high-quality public logo or application icon for this software. You should search your knowledge and look for direct links from Wikimedia Commons (e.g. upload.wikimedia.org/wikipedia/commons/...), Wikipedia/Wikimedia media paths, or official product asset paths. Ensure it is a direct image link ending in .png, .jpg, .jpeg, .svg, or .webp. If not found, set to null.\n'
+        '- "domain": The official website domain of the software or vendor (e.g. "adobe.com", "microsoft.com", "archlinux.org", "code.visualstudio.com"). If not known, set to null.\n\n'
         "Provide ONLY the raw JSON object, without markdown block formatting or any other text."
     )
     
@@ -109,7 +110,8 @@ async def extract_metadata_from_filename(filename: str, api_key: str, model: str
                 edition=parsed.get("edition"),
                 os=parsed.get("os") or "Windows",
                 tags=parsed.get("tags") or [],
-                cover_url=parsed.get("cover_url")
+                cover_url=parsed.get("cover_url"),
+                domain=parsed.get("domain")
             )
         except Exception as e:
             logger.error(f"Failed to extract metadata using OpenRouter: {e}")
@@ -131,5 +133,6 @@ async def extract_metadata_from_filename(filename: str, api_key: str, model: str
                 edition=None,
                 os=os_fallback,
                 tags=[],
-                cover_url=None
+                cover_url=None,
+                domain=None
             )

@@ -26,7 +26,8 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
     os: 'Windows',
     tagsInput: '',
     catalog_label: '',
-    cover_url: ''
+    cover_url: '',
+    domain: ''
   });
 
   // Extract all unique tags for filtering dropdown
@@ -73,7 +74,8 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
         os: analysis.os || 'Windows',
         tagsInput: (analysis.tags || []).join(', '),
         catalog_label: activeLabels[0]?.name || '',
-        cover_url: analysis.cover_url || ''
+        cover_url: analysis.cover_url || '',
+        domain: analysis.domain || ''
       });
     } catch (err) {
       console.error('Filename analysis error:', err);
@@ -84,7 +86,8 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
         os: 'Windows',
         tagsInput: '',
         catalog_label: activeLabels[0]?.name || '',
-        cover_url: ''
+        cover_url: '',
+        domain: ''
       });
     } finally {
       setAnalyzing(false);
@@ -123,7 +126,8 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
         edition: formData.edition || null,
         os: formData.os,
         tags: tagsList,
-        cover_url: formData.cover_url || null
+        cover_url: formData.cover_url || null,
+        domain: formData.domain || null
       });
 
       // Step 3: If cover file is selected, upload it

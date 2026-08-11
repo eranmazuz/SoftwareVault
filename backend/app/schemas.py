@@ -75,6 +75,7 @@ class SoftwareCreate(SoftwareBase):
     custom_fields: List[CustomFieldCreate] | None = []
     licenses: List[LicenseCreate] | None = []
     cover_url: str | None = None
+    domain: str | None = None
 
 class SoftwareUpdate(BaseModel):
     name: str | None = None
@@ -105,3 +106,4 @@ class AIMetadataExtraction(BaseModel):
     os: str
     tags: List[str] = []
     cover_url: str | None = None
+    domain: str | None = None
