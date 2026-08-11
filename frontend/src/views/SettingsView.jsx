@@ -303,9 +303,8 @@ export default function SettingsView() {
 
             <div className="border border-slate-150 dark:border-slate-850 rounded-xl overflow-hidden bg-white dark:bg-slate-950">
               <div className="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-150 dark:border-slate-850 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-2.5 px-4">
-                <div className="col-span-8">Model Name</div>
-                <div className="col-span-2 text-right">Prompt (1M)</div>
-                <div className="col-span-2 text-right">Completion (1M)</div>
+                <div className="col-span-10">Model Name</div>
+                <div className="col-span-2 text-right">Type</div>
               </div>
 
               <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
@@ -324,7 +323,7 @@ export default function SettingsView() {
                           isSelected ? 'bg-indigo-500/5 dark:bg-indigo-500/5 border-l-2 border-indigo-600 font-semibold' : ''
                         }`}
                       >
-                        <div className="col-span-8 pr-4">
+                        <div className="col-span-10 pr-4">
                           <div className="flex items-center gap-1.5">
                             <span className="text-slate-800 dark:text-slate-200 truncate">{model.name}</span>
                             {isSelected && (
@@ -335,11 +334,8 @@ export default function SettingsView() {
                           </div>
                           <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5 truncate">{model.id}</span>
                         </div>
-                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
-                          {model.id === "none" ? "-" : `$${model.input_price_per_m.toFixed(2)}`}
-                        </div>
-                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
-                          {model.id === "none" ? "-" : `$${model.output_price_per_m.toFixed(2)}`}
+                        <div className="col-span-2 text-right text-slate-450 dark:text-slate-500 font-medium">
+                          {model.id === "none" ? "None" : "Image Gen"}
                         </div>
                       </div>
                     );
