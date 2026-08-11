@@ -14,12 +14,38 @@ pipeline:
       - npm install
       - npm run build
 
-  # 3. Docker Build Verification
-  docker-build-test:
-    image: docker:dind
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    commands:
-      # Build verification without saving image layers to save disk space on the agent
-      - docker build -t software-vault-backend-test ./backend
-      - docker build -t software-vault-frontend-test ./frontend
+  # 3. Build & Publish Backend Image
+  publish-backend:
+    image: plugins/docker
+    settings:
+      registry:
+        from_secret: docker_registry
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo:
+        from_secret: docker_image
+      context: ./backend
+      dockerfile: backend/Dockerfile
+      tags:
+        - backend
+        - backend-latest
+
+  # 4. Build & Publish Frontend Image
+  publish-frontend:
+    image: plugins/docker
+    settings:
+      registry:
+        from_secret: docker_registry
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo:
+        from_secret: docker_image
+      context: ./frontend
+      dockerfile: frontend/Dockerfile
+      tags:
+        - frontend
+        - frontend-latest
