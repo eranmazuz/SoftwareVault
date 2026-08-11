@@ -61,6 +61,45 @@ async def fetch_openrouter_models(api_key: str) -> List[Dict[str, Any]]:
             logger.error(f"Error fetching OpenRouter models: {e}")
             return []
 
+async def fetch_openrouter_image_models(api_key: str) -> List[Dict[str, Any]]:
+    """Fetches list of available image generation models from OpenRouter."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/google/antigravity",
+        "X-Title": "Software Vault"
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            response = await client.get(f"{OPENROUTER_BASE_URL}/images/models", headers=headers)
+            if response.status_code != 200:
+                response = await client.get(f"{OPENROUTER_BASE_URL}/images/models")
+                if response.status_code != 200:
+                    return []
+            
+            data = response.json()
+            models_list = []
+            
+            for item in data.get("data", []):
+                model_id = item.get("id")
+                if not model_id:
+                    continue
+                pricing = item.get("pricing", {})
+                prompt_price = float(pricing.get("prompt", 0)) * 1_000_000
+                completion_price = float(pricing.get("completion", 0)) * 1_000_000
+                
+                models_list.append({
+                    "id": model_id,
+                    "name": item.get("name") or model_id,
+                    "input_price_per_m": round(prompt_price, 4),
+                    "output_price_per_m": round(completion_price, 4),
+                })
+            
+            models_list.sort(key=lambda x: x["name"].lower())
+            return models_list
+        except Exception as e:
+            logger.error(f"Error fetching OpenRouter image models: {e}")
+            return []
+
 async def extract_software_name_from_filename(filename: str, api_key: str, model: str) -> str:
     """Uses OpenRouter to extract ONLY the clean generic software name from the installer filename."""
     headers = {
@@ -179,11 +218,14 @@ async def generate_software_cover(software_name: str, description: str, api_key:
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
-            # OpenRouter standard image generation endpoint
-            response = await client.post(f"{OPENROUTER_BASE_URL}/images/generations", headers=headers, json=payload)
+            # Try unified OpenRouter Image API first
+            response = await client.post(f"{OPENROUTER_BASE_URL}/images", headers=headers, json=payload)
+            if response.status_code == 404:
+                # Fallback to standard OpenAI generations endpoint if needed
+                response = await client.post(f"{OPENROUTER_BASE_URL}/images/generations", headers=headers, json=payload)
+                
             if response.status_code == 200:
                 resp_data = response.json()
-                # Return the URL of the first generated image
                 return resp_data.get("data", [{}])[0].get("url")
             else:
                 logger.error(f"OpenRouter Image Gen returned status {response.status_code}: {response.text}")

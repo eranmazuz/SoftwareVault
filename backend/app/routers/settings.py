@@ -57,13 +57,24 @@ async def test_and_connect(payload: dict, db: Session = Depends(get_db)):
     if "..." not in payload.get("openrouter_api_key", ""):
         crud.set_setting(db, "openrouter_api_key", api_key)
         
-    # Categorize models
-    all_models = await ai.fetch_openrouter_models(api_key)
-    categorized = categorize_models_list(all_models)
+    # Fetch separate model types from OpenRouter
+    data_models = await ai.fetch_openrouter_models(api_key)
+    cover_models = await ai.fetch_openrouter_image_models(api_key)
+    
+    # Prepend dynamic disabled option
+    cover_models.insert(0, {
+        "id": "none",
+        "name": "Do Not Generate Cover",
+        "input_price_per_m": 0.0,
+        "output_price_per_m": 0.0
+    })
     
     return {
         "connected": True,
-        "models": categorized
+        "models": {
+            "data_models": data_models,
+            "cover_models": cover_models
+        }
     }
 
 @router.get("/models", response_model=dict)
@@ -71,33 +82,10 @@ async def get_models(db: Session = Depends(get_db)):
     api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
     if not api_key:
         return {"data_models": [], "cover_models": []}
-    all_models = await ai.fetch_openrouter_models(api_key)
-    return categorize_models_list(all_models)
-
-def categorize_models_list(models: list) -> dict:
-    """Splits OpenRouter models list into data models and supported cover generation models."""
-    data_models = models # All text/completions models (no batch filtering)
+        
+    data_models = await ai.fetch_openrouter_models(api_key)
+    cover_models = await ai.fetch_openrouter_image_models(api_key)
     
-    # Supported cover generation keywords
-    cover_keywords = [
-        "stabilityai/", 
-        "black-forest-labs/", 
-        "dall-e", 
-        "flux", 
-        "sdxl", 
-        "playground", 
-        "midjourney",
-        "illustrious",
-        "recraft",
-        "stable-diffusion"
-    ]
-    
-    cover_models = [
-        m for m in models 
-        if any(kw in m["id"].lower() for kw in cover_keywords)
-    ]
-    
-    # Prepend a special model option to disable cover generation
     cover_models.insert(0, {
         "id": "none",
         "name": "Do Not Generate Cover",
