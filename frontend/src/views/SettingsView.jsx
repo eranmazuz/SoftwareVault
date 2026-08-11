@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Key, CheckCircle2, AlertTriangle, Cpu, Loader2, Sparkles, Search, Save } from 'lucide-react';
+import { Key, CheckCircle2, AlertTriangle, Cpu, Loader2, Sparkles, Search, Image } from 'lucide-react';
 import * as api from '../api';
 
 export default function SettingsView() {
   const [settings, setSettings] = useState(null);
   const [apiKey, setApiKey] = useState('');
-  const [models, setModels] = useState([]);
-  const [modelSearch, setModelSearch] = useState('');
+  const [dataModels, setDataModels] = useState([]);
+  const [coverModels, setCoverModels] = useState([]);
+  const [dataSearch, setDataSearch] = useState('');
+  const [coverSearch, setCoverSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
@@ -24,13 +26,13 @@ export default function SettingsView() {
       const data = await api.fetchSettings();
       setSettings(data);
       
-      // If key is configured, set dummy placeholder value
       if (data.openrouter_api_key_configured) {
         setApiKey(data.openrouter_api_key_masked || '••••••••••••••••');
         setConnected(true);
-        // Load models list
-        const modelsList = await api.fetchModels();
-        setModels(modelsList);
+        // Load categorized models
+        const modelsData = await api.fetchModels();
+        setDataModels(modelsData.data_models || []);
+        setCoverModels(modelsData.cover_models || []);
       }
       
       setError(null);
@@ -53,9 +55,9 @@ export default function SettingsView() {
 
       const result = await api.connectSettings(apiKey);
       setConnected(true);
-      setModels(result.models || []);
+      setDataModels(result.models?.data_models || []);
+      setCoverModels(result.models?.cover_models || []);
       
-      // Trigger a settings refresh to update the masked key
       const data = await api.fetchSettings();
       setSettings(data);
       setApiKey(data.openrouter_api_key_masked || '••••••••••••••••');
@@ -69,24 +71,44 @@ export default function SettingsView() {
     }
   };
 
-  const handleSelectModel = async (modelId) => {
+  const handleSelectDataModel = async (modelId) => {
     try {
       setSavingModel(true);
-      await api.saveSettings({ openrouter_model: modelId });
-      setSettings(prev => ({ ...prev, openrouter_model: modelId }));
+      await api.saveSettings({ openrouter_data_model: modelId });
+      setSettings(prev => ({ ...prev, openrouter_data_model: modelId }));
       
-      setSuccessMsg(`Active model updated to ${modelId}`);
+      setSuccessMsg(`Data gathering model updated to ${modelId}`);
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
-      alert('Failed to update active model');
+      alert('Failed to update data gathering model');
     } finally {
       setSavingModel(false);
     }
   };
 
-  const filteredModels = models.filter(m => 
-    m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
-    m.id.toLowerCase().includes(modelSearch.toLowerCase())
+  const handleSelectCoverModel = async (modelId) => {
+    try {
+      setSavingModel(true);
+      await api.saveSettings({ openrouter_cover_model: modelId });
+      setSettings(prev => ({ ...prev, openrouter_cover_model: modelId }));
+      
+      setSuccessMsg(`Cover generation model updated to ${modelId}`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err) {
+      alert('Failed to update cover generation model');
+    } finally {
+      setSavingModel(false);
+    }
+  };
+
+  const filteredDataModels = dataModels.filter(m => 
+    m.name.toLowerCase().includes(dataSearch.toLowerCase()) || 
+    m.id.toLowerCase().includes(dataSearch.toLowerCase())
+  );
+
+  const filteredCoverModels = coverModels.filter(m => 
+    m.name.toLowerCase().includes(coverSearch.toLowerCase()) || 
+    m.id.toLowerCase().includes(coverSearch.toLowerCase())
   );
 
   if (loading) {
@@ -105,7 +127,7 @@ export default function SettingsView() {
           Configuration Settings
         </h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
-          Configure OpenRouter integration to enable automated software metadata extraction.
+          Configure OpenRouter integration to enable background metadata extraction and cover art generation.
         </p>
       </div>
 
@@ -124,7 +146,7 @@ export default function SettingsView() {
         </div>
       )}
 
-      {/* OpenRouter Connection Card */}
+      {/* Connection Card */}
       <div className="glass-panel p-6 rounded-2xl space-y-4">
         <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Key className="text-indigo-600" size={20} />
@@ -177,86 +199,159 @@ export default function SettingsView() {
         </form>
       </div>
 
-      {/* Model Selection Card */}
+      {/* Model Selections */}
       {connected && (
-        <div className="glass-panel p-6 rounded-2xl space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Cpu className="text-indigo-600" size={20} />
-                Active Model Selection
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Select which model to use for filename metadata extraction.
-              </p>
+        <div className="space-y-6">
+          
+          {/* Metadata Data Gathering Model */}
+          <div className="glass-panel p-6 rounded-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Cpu className="text-indigo-600" size={20} />
+                  Metadata Gathering Model
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Select model to gather application info (OS, edition, tags). Supports all text models.
+                </p>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search data models..."
+                  value={dataSearch}
+                  onChange={(e) => setDataSearch(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search models..."
-                value={modelSearch}
-                onChange={(e) => setModelSearch(e.target.value)}
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
-              />
+            <div className="border border-slate-150 dark:border-slate-850 rounded-xl overflow-hidden bg-white dark:bg-slate-950">
+              <div className="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-150 dark:border-slate-850 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-2.5 px-4">
+                <div className="col-span-8">Model Name</div>
+                <div className="col-span-2 text-right">Prompt (1M)</div>
+                <div className="col-span-2 text-right">Completion (1M)</div>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
+                {filteredDataModels.length === 0 ? (
+                  <p className="text-slate-500 dark:text-slate-400 text-xs py-8 text-center">
+                    No matching models found.
+                  </p>
+                ) : (
+                  filteredDataModels.map((model) => {
+                    const isSelected = settings?.openrouter_data_model === model.id;
+                    return (
+                      <div
+                        key={model.id}
+                        onClick={() => !savingModel && handleSelectDataModel(model.id)}
+                        className={`grid grid-cols-12 items-center text-xs py-3 px-4 hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition ${
+                          isSelected ? 'bg-indigo-500/5 dark:bg-indigo-500/5 border-l-2 border-indigo-600 font-semibold' : ''
+                        }`}
+                      >
+                        <div className="col-span-8 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-800 dark:text-slate-200 truncate">{model.name}</span>
+                            {isSelected && (
+                              <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow">
+                                <Sparkles size={8} /> Active
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5 truncate">{model.id}</span>
+                        </div>
+                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
+                          ${model.input_price_per_m.toFixed(2)}
+                        </div>
+                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
+                          ${model.output_price_per_m.toFixed(2)}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="border border-slate-150 dark:border-slate-850 rounded-xl overflow-hidden bg-white dark:bg-slate-950">
-            {/* Table Header */}
-            <div className="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-150 dark:border-slate-850 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-2.5 px-4">
-              <div className="col-span-8">Model Name</div>
-              <div className="col-span-2 text-right">Prompt (1M)</div>
-              <div className="col-span-2 text-right">Completion (1M)</div>
+          {/* AI Cover Art Generation Model */}
+          <div className="glass-panel p-6 rounded-2xl space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Image className="text-indigo-600" size={20} />
+                  AI Cover Art Generator
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Select model to generate logo/cover art. If disabled, a dynamic name-seeded cover will be used.
+                </p>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search cover generators..."
+                  value={coverSearch}
+                  onChange={(e) => setCoverSearch(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-1.5 pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                />
+              </div>
             </div>
 
-            {/* Scrolling List */}
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
-              {filteredModels.length === 0 ? (
-                <p className="text-slate-500 dark:text-slate-400 text-xs py-8 text-center">
-                  No matching models found.
-                </p>
-              ) : (
-                filteredModels.map((model) => {
-                  const isSelected = settings?.openrouter_model === model.id;
-                  return (
-                    <div
-                      key={model.id}
-                      onClick={() => !savingModel && handleSelectModel(model.id)}
-                      className={`grid grid-cols-12 items-center text-xs py-3 px-4 hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition ${
-                        isSelected ? 'bg-indigo-500/5 dark:bg-indigo-500/5 border-l-2 border-indigo-600 font-semibold' : ''
-                      }`}
-                    >
-                      <div className="col-span-8 pr-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-slate-800 dark:text-slate-200 truncate">{model.name}</span>
-                          {isSelected && (
-                            <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                              <Sparkles size={8} /> Active
-                            </span>
-                          )}
+            <div className="border border-slate-150 dark:border-slate-850 rounded-xl overflow-hidden bg-white dark:bg-slate-950">
+              <div className="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-150 dark:border-slate-850 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-2.5 px-4">
+                <div className="col-span-8">Model Name</div>
+                <div className="col-span-2 text-right">Prompt (1M)</div>
+                <div className="col-span-2 text-right">Completion (1M)</div>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
+                {filteredCoverModels.length === 0 ? (
+                  <p className="text-slate-500 dark:text-slate-400 text-xs py-8 text-center">
+                    No matching models found.
+                  </p>
+                ) : (
+                  filteredCoverModels.map((model) => {
+                    const isSelected = settings?.openrouter_cover_model === model.id;
+                    return (
+                      <div
+                        key={model.id}
+                        onClick={() => !savingModel && handleSelectCoverModel(model.id)}
+                        className={`grid grid-cols-12 items-center text-xs py-3 px-4 hover:bg-slate-50 dark:hover:bg-slate-900/40 cursor-pointer transition ${
+                          isSelected ? 'bg-indigo-500/5 dark:bg-indigo-500/5 border-l-2 border-indigo-600 font-semibold' : ''
+                        }`}
+                      >
+                        <div className="col-span-8 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-800 dark:text-slate-200 truncate">{model.name}</span>
+                            {isSelected && (
+                              <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow">
+                                <Sparkles size={8} /> Active
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5 truncate">{model.id}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5 truncate">{model.id}</span>
+                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
+                          {model.id === "none" ? "-" : `$${model.input_price_per_m.toFixed(2)}`}
+                        </div>
+                        <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
+                          {model.id === "none" ? "-" : `$${model.output_price_per_m.toFixed(2)}`}
+                        </div>
                       </div>
-                      
-                      <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
-                        ${model.input_price_per_m.toFixed(2)}
-                      </div>
-                      
-                      <div className="col-span-2 text-right text-slate-600 dark:text-slate-400 font-mono">
-                        ${model.output_price_per_m.toFixed(2)}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Directory Info Card */}
+      {/* Directory Info */}
       <div className="glass-panel p-6 rounded-2xl space-y-2">
         <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">File Storage Library Directory</h4>
         <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-850">

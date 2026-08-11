@@ -8,7 +8,8 @@ class Settings(BaseSettings):
 
     # Optional defaults from env
     OPENROUTER_API_KEY: str | None = None
-    OPENROUTER_MODEL: str | None = "google/gemini-2.5-flash"
+    OPENROUTER_DATA_MODEL: str | None = "google/gemini-2.5-flash"
+    OPENROUTER_COVER_MODEL: str | None = "none"
 
     class Config:
         env_file = ".env"

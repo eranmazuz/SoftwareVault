@@ -67,7 +67,7 @@ class InstallationFileResponse(BaseModel):
 class SoftwareBase(BaseModel):
     name: str
     edition: str | None = None
-    os: str
+    os: str = "Windows"
     tags: List[str] | None = []
     cover_path: str | None = None
 
@@ -76,6 +76,7 @@ class SoftwareCreate(SoftwareBase):
     licenses: List[LicenseCreate] | None = []
     cover_url: str | None = None
     domain: str | None = None
+    gather_info: bool = False
 
 class SoftwareUpdate(BaseModel):
     name: str | None = None
@@ -102,8 +103,3 @@ class SoftwareListResponse(SoftwareBase):
 # AI Metadata Extraction Result
 class AIMetadataExtraction(BaseModel):
     name: str
-    edition: str | None = None
-    os: str
-    tags: List[str] = []
-    cover_url: str | None = None
-    domain: str | None = None

@@ -7,11 +7,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 @router.get("", response_model=dict)
 def get_all_settings(db: Session = Depends(get_db)):
-    # Retrieve from DB, or fallback to environment variables
     api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
-    model = crud.get_setting(db, "openrouter_model") or config.settings.OPENROUTER_MODEL
+    data_model = crud.get_setting(db, "openrouter_data_model") or config.settings.OPENROUTER_DATA_MODEL
+    cover_model = crud.get_setting(db, "openrouter_cover_model") or config.settings.OPENROUTER_COVER_MODEL
     
-    # Hide API key except first/last few chars for security
     masked_key = None
     if api_key:
         masked_key = api_key if len(api_key) <= 10 else f"{api_key[:6]}...{api_key[-4:]}"
@@ -19,23 +18,25 @@ def get_all_settings(db: Session = Depends(get_db)):
     return {
         "openrouter_api_key_configured": api_key is not None,
         "openrouter_api_key_masked": masked_key,
-        "openrouter_model": model,
+        "openrouter_data_model": data_model,
+        "openrouter_cover_model": cover_model,
         "library_path": config.settings.LIBRARY_PATH
     }
 
 @router.post("", response_model=dict)
 def update_settings(payload: dict, db: Session = Depends(get_db)):
     if "openrouter_api_key" in payload:
-        # If payload contains a masked key or empty, we check if we should keep the existing key
         val = payload["openrouter_api_key"]
         if val is not None and "..." in val:
-            # Masked, keep existing
             pass
         else:
             crud.set_setting(db, "openrouter_api_key", val)
             
-    if "openrouter_model" in payload:
-        crud.set_setting(db, "openrouter_model", payload["openrouter_model"])
+    if "openrouter_data_model" in payload:
+        crud.set_setting(db, "openrouter_data_model", payload["openrouter_data_model"])
+        
+    if "openrouter_cover_model" in payload:
+        crud.set_setting(db, "openrouter_cover_model", payload["openrouter_cover_model"])
         
     return {"status": "success"}
 
@@ -43,7 +44,6 @@ def update_settings(payload: dict, db: Session = Depends(get_db)):
 async def test_and_connect(payload: dict, db: Session = Depends(get_db)):
     api_key = payload.get("openrouter_api_key")
     
-    # Resolve if masked
     if api_key and "..." in api_key:
         api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
         
@@ -54,22 +54,58 @@ async def test_and_connect(payload: dict, db: Session = Depends(get_db)):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid API Key or connection failed")
         
-    # Save the key since it is valid
     if "..." not in payload.get("openrouter_api_key", ""):
         crud.set_setting(db, "openrouter_api_key", api_key)
         
-    # Fetch models
-    models_list = await ai.fetch_openrouter_models(api_key)
+    # Categorize models
+    all_models = await ai.fetch_openrouter_models(api_key)
+    categorized = categorize_models_list(all_models)
     
     return {
         "connected": True,
-        "models": models_list
+        "models": categorized
     }
 
-@router.get("/models", response_model=list)
+@router.get("/models", response_model=dict)
 async def get_models(db: Session = Depends(get_db)):
     api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
     if not api_key:
-        return []
-    models_list = await ai.fetch_openrouter_models(api_key)
-    return models_list
+        return {"data_models": [], "cover_models": []}
+    all_models = await ai.fetch_openrouter_models(api_key)
+    return categorize_models_list(all_models)
+
+def categorize_models_list(models: list) -> dict:
+    """Splits OpenRouter models list into data models and supported cover generation models."""
+    data_models = models # All text/completions models (no batch filtering)
+    
+    # Supported cover generation keywords
+    cover_keywords = [
+        "stabilityai/", 
+        "black-forest-labs/", 
+        "dall-e", 
+        "flux", 
+        "sdxl", 
+        "playground", 
+        "midjourney",
+        "illustrious",
+        "recraft",
+        "stable-diffusion"
+    ]
+    
+    cover_models = [
+        m for m in models 
+        if any(kw in m["id"].lower() for kw in cover_keywords)
+    ]
+    
+    # Prepend a special model option to disable cover generation
+    cover_models.insert(0, {
+        "id": "none",
+        "name": "Do Not Generate Cover",
+        "input_price_per_m": 0.0,
+        "output_price_per_m": 0.0
+    })
+    
+    return {
+        "data_models": data_models,
+        "cover_models": cover_models
+    }

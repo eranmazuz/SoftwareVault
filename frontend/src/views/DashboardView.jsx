@@ -29,6 +29,8 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
     cover_url: '',
     domain: ''
   });
+  
+  const [gatherInfo, setGatherInfo] = useState(true);
 
   // Extract all unique tags for filtering dropdown
   const [allTags, setAllTags] = useState([]);
@@ -66,16 +68,16 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
     setAnalyzing(true);
     
     try {
-      // Step 1: AI (or fallback) Analysis of filename
+      // Step 1: AI (or fallback) Analysis of filename to get clean name
       const analysis = await api.analyzeFilename(file.name);
       setFormData({
         name: analysis.name || '',
-        edition: analysis.edition || '',
-        os: analysis.os || 'Windows',
-        tagsInput: (analysis.tags || []).join(', '),
-        catalog_label: activeLabels[0]?.name || '',
-        cover_url: analysis.cover_url || '',
-        domain: analysis.domain || ''
+        edition: '',
+        os: 'Windows',
+        tagsInput: '',
+        catalog_label: '',
+        cover_url: '',
+        domain: ''
       });
     } catch (err) {
       console.error('Filename analysis error:', err);
@@ -85,7 +87,7 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
         edition: '',
         os: 'Windows',
         tagsInput: '',
-        catalog_label: activeLabels[0]?.name || '',
+        catalog_label: '',
         cover_url: '',
         domain: ''
       });
@@ -116,35 +118,35 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
 
     try {
       // Step 2: Create the software entry
-      const tagsList = formData.tagsInput
-        .split(',')
-        .map(t => t.trim())
-        .filter(t => t.length > 0);
-
       const softwareEntry = await api.createSoftware({
         name: formData.name,
-        edition: formData.edition || null,
-        os: formData.os,
-        tags: tagsList,
-        cover_url: formData.cover_url || null,
-        domain: formData.domain || null
+        gather_info: gatherInfo
       });
 
-      // Step 3: If cover file is selected, upload it
+      // Step 3: If cover file is selected, upload it (manual override)
       if (coverFile) {
         await api.uploadSoftwareCover(softwareEntry.id, coverFile);
       }
 
-      // Step 4: Upload the installer file linked to the entry with dynamic label
-      // Determine if label is an existing one or a new string
-      const matchedLabel = activeLabels.find(l => l.name.toLowerCase() === formData.catalog_label.toLowerCase().trim());
+      // Step 4: Upload the installer file with auto-assigned label based on extension
+      const ext = uploadFile.name.substring(uploadFile.name.lastIndexOf('.')).toLowerCase();
+      let derivedLabel = 'Installer';
+      if (ext === '.iso') derivedLabel = 'ISO';
+      else if (ext === '.exe') derivedLabel = 'EXE';
+      else if (ext === '.msi') derivedLabel = 'MSI';
+      else if (ext === '.dmg') derivedLabel = 'DMG';
+      else if (ext === '.pkg') derivedLabel = 'PKG';
+      else if (['.zip', '.rar', '.7z'].includes(ext)) derivedLabel = 'Archive';
+      else if (['.deb', '.rpm'].includes(ext)) derivedLabel = 'Package';
+
+      const matchedLabel = activeLabels.find(l => l.name.toLowerCase() === derivedLabel.toLowerCase());
       const labelId = matchedLabel ? matchedLabel.id : null;
-      const labelName = matchedLabel ? null : formData.catalog_label.trim();
+      const labelName = matchedLabel ? null : derivedLabel;
 
       await api.uploadFile(
         softwareEntry.id,
         labelId,
-        labelName || formData.catalog_label,
+        labelName || derivedLabel,
         uploadFile,
         (progress) => setUploadProgress(progress)
       );
@@ -419,120 +421,34 @@ export default function DashboardView({ onSelectSoftware, activeLabels }) {
                   {analyzing ? (
                     <div className="flex flex-col items-center justify-center py-8">
                       <Loader2 className="animate-spin text-indigo-500 mb-3" size={32} />
-                      <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">AI is extracting software metadata...</p>
-                      <p className="text-xs text-slate-400 mt-1">Detecting name, version, edition, OS and tags</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Analyzing filename...</p>
                     </div>
                   ) : (
                     <>
-                      {/* Cover Selection Row */}
-                      <div className="flex gap-4 items-center">
-                        <div className="w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center overflow-hidden shrink-0">
-                          {coverPreview ? (
-                            <img src={coverPreview} alt="Cover preview" className="w-full h-full object-cover" />
-                          ) : formData.cover_url ? (
-                            <img src={formData.cover_url} alt="Cover preview" className="w-full h-full object-cover" />
-                          ) : (
-                            <ImageIcon className="text-slate-400" size={24} />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                            Software Cover Image
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverChange}
-                              className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                            />
-                            <button
-                              type="button"
-                              className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold py-1.5 px-3 hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
-                            >
-                              Choose local cover...
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Software Name *
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Edition (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Pro, 2026, Enterprise"
-                            value={formData.edition}
-                            onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Operating System *
-                          </label>
-                          <select
-                            required
-                            value={formData.os}
-                            onChange={(e) => setFormData({ ...formData, os: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white cursor-pointer font-medium"
-                          >
-                            <option value="Windows">Windows</option>
-                            <option value="macOS">macOS</option>
-                            <option value="Linux">Linux</option>
-                            <option value="Cross-platform">Cross-platform</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Catalog Label *
-                          </label>
-                          {/* Searchable Combobox using Datalist */}
-                          <input
-                            type="text"
-                            list="active-labels-list"
-                            placeholder="Type label or select..."
-                            required
-                            value={formData.catalog_label}
-                            onChange={(e) => setFormData({ ...formData, catalog_label: e.target.value })}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
-                          />
-                          <datalist id="active-labels-list">
-                            {activeLabels.map(l => (
-                              <option key={l.id} value={l.name} />
-                            ))}
-                          </datalist>
-                        </div>
-                      </div>
-
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                          Tags (comma separated)
+                          Software Name *
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. IDE, Utility, Graphics"
-                          value={formData.tagsInput}
-                          onChange={(e) => setFormData({ ...formData, tagsInput: e.target.value })}
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
                         />
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        <input
+                          type="checkbox"
+                          id="gather-info-chk"
+                          checked={gatherInfo}
+                          onChange={(e) => setGatherInfo(e.target.checked)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 cursor-pointer"
+                        />
+                        <label htmlFor="gather-info-chk" className="text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                          Gather information from AI & generate custom cover image
+                        </label>
                       </div>
                     </>
                   )}

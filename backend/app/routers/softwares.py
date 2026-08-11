@@ -29,18 +29,57 @@ def get_software(software_id: str, db: Session = Depends(get_db)):
 async def create_software(software: schemas.SoftwareCreate, db: Session = Depends(get_db)):
     db_software = crud.create_software(db, software)
     
-    # Compile cover URLs to attempt downloading
-    cover_urls_to_try = []
-    
-    if software.domain and software.domain.strip():
-        # Clearbit Logo API is highly reliable for brand/project domains
-        domain_clean = software.domain.strip().lower()
-        cover_urls_to_try.append(f"https://logo.clearbit.com/{domain_clean}")
+    # 1. Gather info and generate cover using AI if requested
+    if software.gather_info:
+        api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
+        data_model = crud.get_setting(db, "openrouter_data_model") or config.settings.OPENROUTER_DATA_MODEL
+        cover_model = crud.get_setting(db, "openrouter_cover_model") or config.settings.OPENROUTER_COVER_MODEL
         
-    if software.cover_url and software.cover_url.strip():
-        cover_urls_to_try.append(software.cover_url.strip())
-        
-    if cover_urls_to_try:
+        if api_key:
+            import httpx
+            # A. Gather text information (OS, Edition, Tags, Description)
+            info = await ai.gather_software_info(db_software.name, api_key, data_model)
+            
+            # Update fields in DB
+            db_software.edition = info.get("edition") or db_software.edition
+            db_software.os = info.get("os") or db_software.os
+            db_software.tags = info.get("tags") or db_software.tags
+            db.commit()
+            db.refresh(db_software)
+            
+            # B. Generate cover using image model if configured
+            if cover_model and cover_model.lower() != "none":
+                description = info.get("description") or f"App logo for {db_software.name}"
+                cover_url = await ai.generate_software_cover(db_software.name, description, api_key, cover_model)
+                
+                if cover_url:
+                    try:
+                        safe_name = sanitize_path_segment(db_software.name)
+                        software_dir = os.path.join(config.settings.LIBRARY_PATH, safe_name)
+                        os.makedirs(software_dir, exist_ok=True)
+                        
+                        # Set default cover format as png
+                        stored_path = os.path.join(software_dir, "cover.png")
+                        
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        }
+                        
+                        async with httpx.AsyncClient(timeout=15.0) as client:
+                            response = await client.get(cover_url, headers=headers, follow_redirects=True)
+                            if response.status_code == 200:
+                                with open(stored_path, "wb") as f:
+                                    f.write(response.content)
+                                db_software.cover_path = stored_path
+                                db.commit()
+                                db.refresh(db_software)
+                            else:
+                                print(f"Failed to download generated cover: status {response.status_code}", flush=True)
+                    except Exception as e:
+                        print(f"Failed to download or save generated cover: {str(e)}", flush=True)
+                        
+    # 2. Allow manual override custom cover file download if url is directly passed
+    elif software.cover_url:
         import httpx
         try:
             safe_name = sanitize_path_segment(db_software.name)
@@ -50,33 +89,23 @@ async def create_software(software: schemas.SoftwareCreate, db: Session = Depend
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
+            ext = ".png"
+            for possible_ext in [".png", ".jpg", ".jpeg", ".webp", ".svg"]:
+                if possible_ext in software.cover_url.lower():
+                    ext = possible_ext
+                    break
+            stored_path = os.path.join(software_dir, f"cover{ext}")
             
-            for url in cover_urls_to_try:
-                # Default to .png for Clearbit, check url string for others
-                ext = ".png"
-                for possible_ext in [".png", ".jpg", ".jpeg", ".webp", ".svg"]:
-                    if possible_ext in url.lower():
-                        ext = possible_ext
-                        break
-                
-                stored_path = os.path.join(software_dir, f"cover{ext}")
-                
-                try:
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        response = await client.get(url, headers=headers, follow_redirects=True)
-                        if response.status_code == 200:
-                            with open(stored_path, "wb") as f:
-                                f.write(response.content)
-                            db_software.cover_path = stored_path
-                            db.commit()
-                            db.refresh(db_software)
-                            break
-                        else:
-                            print(f"Cover download from {url} failed with status code {response.status_code}", flush=True)
-                except Exception as e:
-                    print(f"Failed to download cover from {url}: {str(e)}", flush=True)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(software.cover_url, headers=headers, follow_redirects=True)
+                if response.status_code == 200:
+                    with open(stored_path, "wb") as f:
+                        f.write(response.content)
+                    db_software.cover_path = stored_path
+                    db.commit()
+                    db.refresh(db_software)
         except Exception as e:
-            print(f"Failed to download cover image: {str(e)}", flush=True)
+            print(f"Failed to download manual cover URL: {str(e)}", flush=True)
             
     return db_software
 
@@ -162,7 +191,7 @@ async def analyze_filename(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Filename is required")
         
     api_key = crud.get_setting(db, "openrouter_api_key") or config.settings.OPENROUTER_API_KEY
-    model = crud.get_setting(db, "openrouter_model") or config.settings.OPENROUTER_MODEL
+    model = crud.get_setting(db, "openrouter_data_model") or config.settings.OPENROUTER_DATA_MODEL
     
     if not api_key:
         # Fallback to filename-as-name (FR-27)
@@ -171,23 +200,11 @@ async def analyze_filename(payload: dict, db: Session = Depends(get_db)):
             if name_fallback.lower().endswith(ext):
                 name_fallback = name_fallback[:-len(ext)]
                 break
-                
-        os_fallback = "Windows"
-        if ".dmg" in filename.lower() or ".pkg" in filename.lower():
-            os_fallback = "macOS"
-        elif any(ext in filename.lower() for ext in [".deb", ".rpm", ".tar.gz", ".sh"]):
-            os_fallback = "Linux"
-            
-        return schemas.AIMetadataExtraction(
-            name=name_fallback,
-            edition=None,
-            os=os_fallback,
-            tags=[]
-        )
+        return schemas.AIMetadataExtraction(name=name_fallback)
         
     # OpenRouter API key exists, call extraction helper
-    result = await ai.extract_metadata_from_filename(filename, api_key, model)
-    return result
+    generic_name = await ai.extract_software_name_from_filename(filename, api_key, model)
+    return schemas.AIMetadataExtraction(name=generic_name)
 
 
 # --- Cover Image Management ---
