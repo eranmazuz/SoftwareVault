@@ -14,8 +14,8 @@ pipeline:
       - npm install
       - npm run build
 
-  # 3. Build & Publish Backend Image
-  publish-backend:
+  # 3. Build & Publish Combined Image
+  publish-app:
     image: plugins/docker
     settings:
       registry:
@@ -26,26 +26,8 @@ pipeline:
         from_secret: docker_password
       repo:
         from_secret: docker_image
-      context: ./backend
-      dockerfile: backend/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       tags:
-        - backend
-        - backend-latest
-
-  # 4. Build & Publish Frontend Image
-  publish-frontend:
-    image: plugins/docker
-    settings:
-      registry:
-        from_secret: docker_registry
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo:
-        from_secret: docker_image
-      context: ./frontend
-      dockerfile: frontend/Dockerfile
-      tags:
-        - frontend
-        - frontend-latest
+        - latest
+        - main
