@@ -1,3 +1,11 @@
+# Woodpecker CI Pipeline Configuration
+# Documentation: https://woodpecker-ci.org/
+
+networks:
+  shared-net:
+    name: tools-net
+    external: true
+
 steps:
   # 1. Backend Lint / Syntax Check
   backend-test:
@@ -5,6 +13,9 @@ steps:
     commands:
       - pip install -r backend/requirements.txt
       - python -m py_compile backend/app/main.py backend/app/models.py backend/app/schemas.py backend/app/crud.py backend/app/ai.py
+    when:
+      event: push
+      branch: main
 
   # 2. Frontend Lint & Build Compilation Check
   frontend-build:
@@ -13,21 +24,34 @@ steps:
       - cd frontend
       - npm install
       - npm run build
+    when:
+      event: push
+      branch: main
 
-  # 3. Build & Publish Combined Image
-  publish-app:
-    image: plugins/kaniko
+  # 3. Build & Publish Combined Image (Template Base)
+  build-and-push:
+    image: plugins/docker
+    privileged: true
+    networks:
+      - shared-net
     settings:
+      # Loaded dynamically from Woodpecker Secrets
       registry:
         from_secret: docker_registry
+      repo:
+        from_secret: docker_image
+      insecure: true
+      # Docker build parameters
+      dockerfile: Dockerfile
+      context: .
+      tags:
+        - latest
+        - ${CI_COMMIT_SHA:0:8}
+      # Secrets to store credentials securely in Woodpecker CI
       username:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      repo:
-        from_secret: docker_image
-      context: .
-      dockerfile: Dockerfile
-      tags:
-        - latest
-        - main
+    when:
+      event: push
+      branch: main
