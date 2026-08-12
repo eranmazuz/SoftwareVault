@@ -1,4 +1,4 @@
-pipeline:
+steps:
   # 1. Backend Lint / Syntax Check
   backend-test:
     image: python:3.11-slim
