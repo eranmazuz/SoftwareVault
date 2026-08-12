@@ -16,7 +16,7 @@ steps:
 
   # 3. Build & Publish Combined Image
   publish-app:
-    image: plugins/docker
+    image: plugins/kaniko
     settings:
       registry:
         from_secret: docker_registry
