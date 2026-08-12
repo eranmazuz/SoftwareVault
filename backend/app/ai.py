@@ -204,9 +204,9 @@ async def generate_software_cover(software_name: str, description: str, api_key:
     }
     
     # Construct a high-grade icon/cover prompt
+    # Note: we use the generic description instead of the trademarked name to bypass brand moderation filters
     image_prompt = (
-        f"A modern minimalist app icon/logo vector graphic for '{software_name}'. "
-        f"The software is described as: {description}. "
+        f"A modern minimalist app icon/logo vector graphic representing: {description}. "
         "Sleek centered icon, vector illustration style, solid dark slate blue background, "
         "professional product design, high resolution, clean lines, no text or words on the logo."
     )

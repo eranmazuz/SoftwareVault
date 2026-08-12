@@ -28,3 +28,6 @@ backend/app/routers/__pycache__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Test scripts
+test_ai_cover.py
